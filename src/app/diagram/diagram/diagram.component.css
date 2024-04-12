@@ -1,0 +1,12 @@
+.myDiagramDiv {
+  background: whitesmoke;
+  width: 700px;
+  height: 300px;
+  border: 1px solid black;
+}
+
+.left {
+  float: left;
+  padding: 5px;
+  margin: 5px;
+}

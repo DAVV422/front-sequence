@@ -1,0 +1,12 @@
+.myPaletteDiv {
+    background: lightcyan;
+    border: 1px solid navy;
+    width: 125px;
+    height: 300px;
+  }
+
+  .left {
+    float: left;
+    padding: 5px;
+    margin: 5px;
+  }
