@@ -17,7 +17,7 @@ export class PaletteComponent {
     // Palette state props
     paletteNodeData: [
       {id:"NewClass", key:"NewClass", text:"Class: NameClass", isGroup:true, duration:9},
-      {start:3, duration:1, heigth:10},
+      {start:3, duration:1, heigth:10, key: "newGroup" },
     ],
     paletteModelData: { prop: 'val' }
   };
@@ -30,7 +30,7 @@ export class PaletteComponent {
 
     // define the Node template
     palette.groupTemplate =
-      $(go.Group, 'Auto',      
+      $(go.Group, 'Auto',
         { name: "HEADER" },
         $(go.Shape, "Rectangle",
         {
@@ -42,18 +42,18 @@ export class PaletteComponent {
       );
 
     palette.nodeTemplate =
-      $(go.Node, "Vertical",  
+      $(go.Node, "Vertical",
         { position: new go.Point(100, 0) },
         $(go.Shape, "Rectangle",
         {
-          name: "SHAPE",
+          name: "SHAPEBOX",
           fill: "white", stroke: "black",
           width: 10,
-          height: 50,          
+          height: 50,
           // allow Activities to be resized down to 1/4 of a time unit
           minSize: new go.Size(10, 15)
         }),
-        new go.Binding("duration").makeTwoWay()
+        new go.Binding("duration", 'key').makeTwoWay()
       );
 
     palette.model = $(go.GraphLinksModel);

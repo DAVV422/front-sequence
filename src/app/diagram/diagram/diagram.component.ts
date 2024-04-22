@@ -1,6 +1,6 @@
 import { ChangeDetectorRef, Component, ViewChild, ViewEncapsulation } from '@angular/core';
 import * as go from 'gojs';
-import { DataSyncService, PaletteComponent, DiagramComponent as Diagram } from 'gojs-angular';
+import { DataSyncService, DiagramComponent as Diagram } from 'gojs-angular';
 import produce from "immer";
 
 interface data{
@@ -11,6 +11,14 @@ interface data{
   loc: string;
   duration: number;
 }
+
+// some parameters
+const LinePrefix = 20;  // vertical starting point in document for all Messages and Activations
+const LineSuffix = 30;  // vertical length beyond the last message time
+const MessageSpacing = 20;  // vertical distance between Messages at different steps
+const ActivityWidth = 10;  // width of each vertical activity bar
+const ActivityStart = 5;  // height before start message time
+const ActivityEnd = 5;  // height beyond end message time
 
 @Component({
   selector: 'diagram-diagram',
@@ -24,10 +32,11 @@ export class DiagramComponent {
 
   constructor(private cdr: ChangeDetectorRef) { }
 
-  state = {
+  public state = {
     // Diagram state props
     diagramNodeData: [
       {id:"Fred", key:"Fred", text:"Fred: Patron", isGroup:true, loc:"0 0", duration:9},
+      {group:"Fred", start:2, duration:2},
     ],
     diagramLinkData: [],
     diagramModelData: { prop: 'value' },
@@ -40,98 +49,154 @@ export class DiagramComponent {
   public selectedNodeData: go.ObjectData | any = null;
   public observedDiagram:any = null;
 
-  public initDiagram(): go.Diagram {
+  public diagrama!: go.Diagram;
 
-    const $ = go.GraphObject.make;
-    const dia = $(go.Diagram, {
-      'undoManager.isEnabled': true,
-      'clickCreatingTool.archetypeNodeData': { text: 'new node', color: 'lightblue' },
-      model: $(go.GraphLinksModel,
-        {
-          nodeKeyProperty: 'id',
-          linkToPortIdProperty: 'toPort',
-          linkFromPortIdProperty: 'fromPort',
-          linkKeyProperty: 'key' // IMPORTANT! must be defined for merges and data sync when using GraphLinksModel
-        }
-      )
-    });
+// initialize diagram / templates
+public initDiagram(): go.Diagram {
 
-    dia.commandHandler.archetypeGroupData = { key: 'Group', isGroup: true };
-
-
-    // define the Lifeline Node template.
-    dia.groupTemplate =
-    $(go.Group, "Vertical",
+  const $ = go.GraphObject.make;
+  this.diagrama = $(go.Diagram, {
+    'undoManager.isEnabled': true,
+    'clickCreatingTool.archetypeNodeData': { text: 'new node', color: 'lightblue' },
+    model: $(go.GraphLinksModel,
       {
-        locationSpot: go.Spot.Bottom,
-        locationObjectName: "HEADER",
-        minLocation: new go.Point(0, 0),
-        maxLocation: new go.Point(9999, 0),
-        selectionObjectName: "HEADER"
-      },
-      new go.Binding("location", "loc", go.Point.parse).makeTwoWay(go.Point.stringify),
-      $(go.Panel, "Auto",
-        { name: "HEADER" },
-        $(go.Shape, "Rectangle",
-          {
-            fill: $(go.Brush, "Linear", { 0: "#bbdefb", 1: go.Brush.darkenBy("#bbdefb", 0.1) }),
-            stroke: null
-          }),
-        $(go.TextBlock,
-          {
-            margin: 5,
-            font: "400 10pt Source Sans Pro, sans-serif"
-          },
-          new go.Binding("text", "text"))
-      ),
-      $(go.Shape,
-        {
-          figure: "LineV",
-          fill: null,
-          stroke: "gray",
-          strokeDashArray: [3, 3],
-          width: 1,
-          alignment: go.Spot.Center,
-          portId: "",
-          fromLinkable: true,
-          fromLinkableDuplicates: true,
-          toLinkable: true,
-          toLinkableDuplicates: true,
-          cursor: "pointer"
-        },
-        new go.Binding("height", "duration", go.Point.parse))
+        nodeKeyProperty: 'id',
+        linkToPortIdProperty: 'toPort',
+        linkFromPortIdProperty: 'fromPort',
+        linkKeyProperty: 'key' // IMPORTANT! must be defined for merges and data sync when using GraphLinksModel
+      }
+    )
+  });
+
+  this.diagrama.commandHandler.archetypeGroupData = { key: 'Group', isGroup: true };
+
+  const makePort = function(id: string, spot: go.Spot) {
+    return $(go.Shape, 'Circle',
+      {
+        opacity: .5,
+        fill: 'gray', strokeWidth: 0, desiredSize: new go.Size(8, 8),
+        portId: id, alignment: spot,
+        fromLinkable: true, toLinkable: true
+      }
     );
-
-    // define the Node template
-    dia.nodeTemplate =
-      $(go.Node, 'Spot',
-        {
-          contextMenu:
-            $('ContextMenu',
-              $('ContextMenuButton',
-                $(go.TextBlock, 'Group'),
-                { click: function(e, obj) { e.diagram.commandHandler.groupSelection(); } },
-                new go.Binding('visible', '', function(o) {
-                  return o.diagram.selection.count > 1;
-                }).ofObject())
-            )
-        },
-        new go.Binding("location", "loc", go.Point.parse).makeTwoWay(go.Point.stringify),
-        $(go.Panel, 'Auto',
-          $(go.Shape, 'RoundedRectangle', { stroke: null },
-            new go.Binding('fill', 'color', (c, panel) => {
-
-              return c;
-            })
-          ),
-          $(go.TextBlock, { margin: 8, editable: true },
-            new go.Binding('text').makeTwoWay())
-        ),
-        
-      );
-    return dia;
   }
 
+  const computeActivityLocation = (act: any) => {
+    const groupdata: go.ObjectData | null = this.diagrama.model.findNodeDataForKey(act.group);
+    if (groupdata === null) return new go.Point();
+    // get location of Lifeline's starting point
+    const grouploc = go.Point.parse(groupdata['loc']);
+    return new go.Point(grouploc.x, convertTimeToY(act.start) - ActivityStart);
+  }
+
+  const backComputeActivityLocation = (loc: any, act: any) => {
+    this.diagrama.model.setDataProperty(act, "start", convertYToTime(loc.y + ActivityStart));
+  }
+
+  const computeLifelineHeight = (duration: number) => {
+    return LinePrefix + duration * MessageSpacing + LineSuffix;
+  }
+
+  const computeActivityHeight = (duration: number) => {
+    return ActivityStart + duration * MessageSpacing + ActivityEnd;
+  };
+
+  const backComputeActivityHeight = (height: number) => {
+    return (height - ActivityStart - ActivityEnd) / MessageSpacing;
+  }
+
+  const convertTimeToY = (t: number) => {
+    return t * MessageSpacing + LinePrefix;
+  }
+
+  const convertYToTime = (y: number) => {
+    return (y - LinePrefix) / MessageSpacing;
+  }
+
+  // define the Lifeline Node template.
+  this.diagrama.groupTemplate =
+  $(go.Group, "Vertical",
+    {
+      locationSpot: go.Spot.Bottom,
+      locationObjectName: "HEADER",
+      minLocation: new go.Point(0, 0),
+      maxLocation: new go.Point(9999, 0),
+      selectionObjectName: "HEADER"
+    },
+    new go.Binding("location", "loc", go.Point.parse).makeTwoWay(go.Point.stringify),
+    $(go.Panel, "Auto",
+      { name: "HEADER" },
+      $(go.Shape, "Rectangle",
+        {
+          fill: $(go.Brush, "Linear", { 0: "#bbdefb", 1: go.Brush.darkenBy("#bbdefb", 0.1) }),
+          stroke: null
+        }),
+      $(go.TextBlock,
+        {
+          margin: 5,
+          font: "400 10pt Source Sans Pro, sans-serif"
+        },
+        new go.Binding("text", "text"))
+    ),
+    $(go.Shape,
+      {
+        figure: "LineV",
+        fill: null,
+        stroke: "gray",
+        strokeDashArray: [3, 3],
+        width: 1,
+        alignment: go.Spot.Center,
+        portId: "",
+        fromLinkable: true,
+        fromLinkableDuplicates: true,
+        toLinkable: true,
+        toLinkableDuplicates: true,
+        cursor: "pointer"
+      },
+      new go.Binding("height", "duration", computeLifelineHeight))
+  );
+
+
+  // define the Activity Node template
+  this.diagrama.nodeTemplate =
+  $(go.Node,
+    {
+      locationSpot: go.Spot.Top,
+      locationObjectName: "SHAPE",
+      minLocation: new go.Point(NaN, LinePrefix - ActivityStart),
+      maxLocation: new go.Point(NaN, 19999),
+      selectionObjectName: "SHAPE",
+      resizable: true,
+      resizeObjectName: "SHAPE",
+      resizeAdornmentTemplate:
+        $(go.Adornment, "Spot",
+          $(go.Placeholder),
+          $(go.Shape,  // only a bottom resize handle
+            {
+              alignment: go.Spot.Bottom, cursor: "col-resize",
+              desiredSize: new go.Size(6, 6), fill: "yellow"
+            })
+        )
+    },
+    new go.Binding("location", "", computeActivityLocation).makeTwoWay(backComputeActivityLocation),
+    $(go.Shape, "Rectangle",
+      {
+        name: "SHAPEBOX",
+        fill: "white", stroke: "black",
+        width: ActivityWidth,
+        // allow Activities to be resized down to 1/4 of a time unit
+        minSize: new go.Size(ActivityWidth, computeActivityHeight(0.25))
+      },
+      new go.Binding("height", "duration", computeActivityHeight).makeTwoWay(backComputeActivityHeight)
+    )
+  );
+
+
+  return this.diagrama;
+}
+
+
+  // When the diagram model changes, update app data to reflect those changes. Be sure to use immer's "produce" function to preserve immutability
   public diagramModelChange(changes: go.IncrementalData) {
     if (!changes) return;
     const appComp = this;
@@ -149,8 +214,8 @@ export class DiagramComponent {
       const modifiedNodeDatas = changes.modifiedNodeData;
       if (modifiedNodeDatas && draft.selectedNodeData) {
         for (let i = 0; i < modifiedNodeDatas.length; i++) {
-          const mn:any = modifiedNodeDatas[i];
-          const nodeKeyProperty:any = appComp.myDiagramComponent.diagram.model.nodeKeyProperty as string;
+          const mn: any = modifiedNodeDatas[i];
+          const nodeKeyProperty: any = appComp.myDiagramComponent.diagram.model.nodeKeyProperty as string;
           if (mn[nodeKeyProperty] === draft.selectedNodeData![nodeKeyProperty]) {
             draft.selectedNodeData = mn;
           }
@@ -158,6 +223,8 @@ export class DiagramComponent {
       }
     });
   };
+
+
 
   public ngAfterViewInit() {
     if (this.observedDiagram) return;
@@ -181,6 +248,49 @@ export class DiagramComponent {
         }
       });
     });
+
+
+    // this.myDiagramComponent.diagram.addDiagramListener("ExternalObjectsDropped", (e) => {
+    //   let nodesAdded = e.subject;
+    //   let isNewGroup = false;
+    //   // Iterar sobre los nodos añadidos
+    //   nodesAdded.each((node:any) => {
+    //     // Acceder a los datos del nodo
+    //     var nodeData = node.data;
+
+    //     // Obtener el key del nodo añadido
+    //     var nodeKey = nodeData.key;
+
+    //     if( nodeKey === "newGroup"){
+    //       isNewGroup = true;
+    //     }
+    //   });
+
+    //   if (!isNewGroup){
+    //     return;
+    //   }
+
+    //   // Obtener el punto de destino
+    //   const dropPoint: go.Point = e.diagram.lastInput.documentPoint;
+    //   console.log(dropPoint);
+
+    //   // Verificar si el punto de destino está sobre una figura LineV
+    //   const part = e.diagram.findPartAt(dropPoint, false);
+
+    //   console.log(part);
+    //   console.log(part?.category);
+    //   if( part && part.category === "Group" && part.findObject("LineV")) {
+    //     // El punto de destino está sobre LineV, permitir la operación de colocación
+    //     // Permitir que se agregue el nodo
+    //     console.log("aceptado");
+    //     return;
+    //   } else {
+    //     // e.diagram.currentTool.doCancel();
+    //   }
+    // })
+
+
+
   } // end ngAfterViewInit
 
   /**
