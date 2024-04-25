@@ -5,8 +5,8 @@ import { GojsAngularModule } from 'gojs-angular';
 import { DiagramComponent } from './diagram/diagram.component';
 import { InspectorComponent } from './inspector/inspector.component';
 import { InspectorRowComponent } from './inspector-row/inspector-row.component';
-import { BrowserModule } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
+import { DiagramRoutingModule } from './diagram-routing.module';
 
 
 
@@ -18,8 +18,8 @@ import { FormsModule } from '@angular/forms';
     InspectorRowComponent
   ],
   imports: [
-    BrowserModule,
     CommonModule,
+    DiagramRoutingModule,
     FormsModule,
     GojsAngularModule
   ],

@@ -1,0 +1,71 @@
+/* Contenedor principal */
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Contenedor interno */
+.inner-container {
+  min-width: fit-content;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #d1d5db; /* Border color similar a Tailwind */
+  background-color: white;
+  padding: 1.5rem; /* px-6 */
+  padding-top: 2.5rem; /* py-10 */
+  padding-bottom: 2.5rem; /* py-10 */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Sombra similar a Tailwind */
+  border-radius: 4px; /* rounded-[4px] */
+}
+
+.title-form {
+  display: flex; /* Establece el display a flex */
+  flex-direction: column; /* Establece la dirección del flex a columna */
+  font-size: 0.875rem; /* Establece el tamaño de fuente a pequeño */
+  border-radius: 0.375rem; /* Establece el radio de las esquinas a 6px, que es similar a 'rounded-md' en Tailwind */
+}
+
+.login-center {
+  margin-bottom: 2rem; /* mb-8: Establece un margen inferior de 2rem (32px) */
+  display: flex; /* Establece el display a flex */
+  justify-content: center; /* Centra los elementos hijos horizontalmente */
+}
+
+/* Elementos de entrada (inputs) */
+.input-text,
+.input-password {
+  margin-bottom: 0.25rem; /* mb-1 */
+  border-radius: 4px; /* rounded-[4px] */
+  border: 1px solid #d1d5db; /* Color de borde similar a Tailwind */
+  padding: 0.75rem; /* p-3 */
+}
+
+.input-text:hover,
+.input-password:hover {
+  border-color: #fbbf24; /* hover:border-yellow-500 */
+}
+
+.input-text:focus,
+.input-password:focus {
+  outline: none; /* focus:outline-none */
+}
+
+/* Botón */
+.button-submit {
+  margin-top: 1.25rem; /* mt-5 */
+  width: 100%; /* w-full */
+  border: 1px solid transparent; /* Border similar a Tailwind */
+  padding: 0.5rem; /* p-2 */
+  background: linear-gradient(to right, #374151, #6b7280); /* bg-gradient-to-r */
+  color: white; /* text-white */
+  border-radius: 4px; /* rounded-[4px] */
+  transition: all 0.3s; /* duration-300 */
+}
+
+.button-submit:hover {
+  background-color: #cbd5e1; /* hover:bg-slate-400 */
+  transform: scale(1.05); /* scale-105 */
+}

@@ -16,6 +16,7 @@ export class InspectorComponent {
   constructor() { }
 
   public onInputChange(propAndValObj: any) {
+    console.log("ingresa al inspector")
     this.onInspectorChange.emit(propAndValObj);
   }
 }

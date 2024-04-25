@@ -19,6 +19,7 @@ const MessageSpacing = 20;  // vertical distance between Messages at different s
 const ActivityWidth = 10;  // width of each vertical activity bar
 const ActivityStart = 5;  // height before start message time
 const ActivityEnd = 5;  // height beyond end message time
+UnsavedFileName: string = 'Unsaved File';
 
 @Component({
   selector: 'diagram-diagram',
@@ -36,7 +37,7 @@ export class DiagramComponent {
     // Diagram state props
     diagramNodeData: [
       {id:"Fred", key:"Fred", text:"Fred: Patron", isGroup:true, loc:"0 0", duration:9},
-      {group:"Fred", start:2, duration:2},
+      {group:"Fred", start:2, duration:2, key:'grupo1'},
     ],
     diagramLinkData: [],
     diagramModelData: { prop: 'value' },
@@ -57,6 +58,7 @@ public initDiagram(): go.Diagram {
   const $ = go.GraphObject.make;
   this.diagrama = $(go.Diagram, {
     'undoManager.isEnabled': true,
+
     'clickCreatingTool.archetypeNodeData': { text: 'new node', color: 'lightblue' },
     model: $(go.GraphLinksModel,
       {
@@ -147,10 +149,6 @@ public initDiagram(): go.Diagram {
         width: 1,
         alignment: go.Spot.Center,
         portId: "",
-        fromLinkable: true,
-        fromLinkableDuplicates: true,
-        toLinkable: true,
-        toLinkableDuplicates: true,
         cursor: "pointer"
       },
       new go.Binding("height", "duration", computeLifelineHeight))
@@ -168,6 +166,7 @@ public initDiagram(): go.Diagram {
       selectionObjectName: "SHAPE",
       resizable: true,
       resizeObjectName: "SHAPE",
+      movable: true,
       resizeAdornmentTemplate:
         $(go.Adornment, "Spot",
           $(go.Placeholder),
@@ -176,7 +175,9 @@ public initDiagram(): go.Diagram {
               alignment: go.Spot.Bottom, cursor: "col-resize",
               desiredSize: new go.Size(6, 6), fill: "yellow"
             })
-        )
+        ),
+      fromSpot: go.Spot.TopSide,
+      toSpot: go.Spot.BottomSide
     },
     new go.Binding("location", "", computeActivityLocation).makeTwoWay(backComputeActivityLocation),
     $(go.Shape, "Rectangle",
@@ -185,12 +186,35 @@ public initDiagram(): go.Diagram {
         fill: "white", stroke: "black",
         width: ActivityWidth,
         // allow Activities to be resized down to 1/4 of a time unit
-        minSize: new go.Size(ActivityWidth, computeActivityHeight(0.25))
+        minSize: new go.Size(ActivityWidth, computeActivityHeight(0.25)),
+        // Permite que el nodo actúe como un punto de conexión de salida y entrada para enlaces
+        fromLinkable: true,
+        toLinkable: true,
+        portId: "SHAPEBOX", // Asigna un portId único
+        fromSpot: go.Spot.AllSides, // Permitir conexiones desde todos los lados
+        toSpot: go.Spot.AllSides // Permitir conexiones desde todos los lados
       },
       new go.Binding("height", "duration", computeActivityHeight).makeTwoWay(backComputeActivityHeight)
-    )
+    ),
   );
 
+  this.diagrama.linkTemplate =
+  $(go.Link,
+    { selectionAdorned: true, curviness: 0 },
+    $(go.Shape, "Rectangle",
+      { stroke: "black" }),
+    $(go.Shape,
+      { toArrow: "OpenTriangle", stroke: "black" }), // Flecha en el extremo "to"
+    $(go.TextBlock,
+      {
+        font: "400 9pt Source Sans Pro, sans-serif",
+        segmentIndex: 0,
+        segmentOffset: new go.Point(NaN, NaN),
+        isMultiline: false,
+        editable: true
+      },
+    new go.Binding("text", "text").makeTwoWay())
+  );
 
   return this.diagrama;
 }
@@ -207,17 +231,20 @@ public initDiagram(): go.Diagram {
       const nodeData: any = DataSyncService.syncNodeData(changes, draft.diagramNodeData, appComp.observedDiagram.model);
       const linkData: any = DataSyncService.syncLinkData(changes, draft.diagramLinkData, appComp.observedDiagram.model);
       const modelData: any = DataSyncService.syncModelData(changes, draft.diagramModelData);
+      console.log(nodeData);
       draft.diagramNodeData = nodeData;
       draft.diagramLinkData = linkData;
       draft.diagramModelData = modelData;
       // If one of the modified nodes was the selected node used by the inspector, update the inspector selectedNodeData object
       const modifiedNodeDatas = changes.modifiedNodeData;
+      console.log(draft.selectedNodeData);
       if (modifiedNodeDatas && draft.selectedNodeData) {
         for (let i = 0; i < modifiedNodeDatas.length; i++) {
           const mn: any = modifiedNodeDatas[i];
           const nodeKeyProperty: any = appComp.myDiagramComponent.diagram.model.nodeKeyProperty as string;
           if (mn[nodeKeyProperty] === draft.selectedNodeData![nodeKeyProperty]) {
             draft.selectedNodeData = mn;
+            console.log(draft.selectedNodeData);
           }
         }
       }
@@ -234,6 +261,7 @@ public initDiagram(): go.Diagram {
     const appComp: DiagramComponent = this;
     // listener for inspector
     this.myDiagramComponent.diagram.addDiagramListener('ChangedSelection', function(e) {
+      console.log("selecciona");
       if (e.diagram.selection.count === 0) {
         appComp.selectedNodeData = null;
       }
@@ -250,46 +278,6 @@ public initDiagram(): go.Diagram {
     });
 
 
-    // this.myDiagramComponent.diagram.addDiagramListener("ExternalObjectsDropped", (e) => {
-    //   let nodesAdded = e.subject;
-    //   let isNewGroup = false;
-    //   // Iterar sobre los nodos añadidos
-    //   nodesAdded.each((node:any) => {
-    //     // Acceder a los datos del nodo
-    //     var nodeData = node.data;
-
-    //     // Obtener el key del nodo añadido
-    //     var nodeKey = nodeData.key;
-
-    //     if( nodeKey === "newGroup"){
-    //       isNewGroup = true;
-    //     }
-    //   });
-
-    //   if (!isNewGroup){
-    //     return;
-    //   }
-
-    //   // Obtener el punto de destino
-    //   const dropPoint: go.Point = e.diagram.lastInput.documentPoint;
-    //   console.log(dropPoint);
-
-    //   // Verificar si el punto de destino está sobre una figura LineV
-    //   const part = e.diagram.findPartAt(dropPoint, false);
-
-    //   console.log(part);
-    //   console.log(part?.category);
-    //   if( part && part.category === "Group" && part.findObject("LineV")) {
-    //     // El punto de destino está sobre LineV, permitir la operación de colocación
-    //     // Permitir que se agregue el nodo
-    //     console.log("aceptado");
-    //     return;
-    //   } else {
-    //     // e.diagram.currentTool.doCancel();
-    //   }
-    // })
-
-
 
   } // end ngAfterViewInit
 
@@ -298,7 +286,7 @@ public initDiagram(): go.Diagram {
    * @param changedPropAndVal An object with 2 entries: "prop" (the node data prop changed), and "newVal" (the value the user entered in the inspector <input>)
    */
   public handleInspectorChange(changedPropAndVal:any) {
-
+    console.log('inspecciona')
     const path = changedPropAndVal.prop;
     const value = changedPropAndVal.newVal;
 

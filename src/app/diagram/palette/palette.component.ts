@@ -17,7 +17,7 @@ export class PaletteComponent {
     // Palette state props
     paletteNodeData: [
       {id:"NewClass", key:"NewClass", text:"Class: NameClass", isGroup:true, duration:9},
-      {start:3, duration:1, heigth:10, key: "newGroup" },
+      {start:3, duration:1, key: "newGroup", group:""},
     ],
     paletteModelData: { prop: 'val' }
   };
