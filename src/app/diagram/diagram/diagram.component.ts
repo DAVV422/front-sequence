@@ -19,7 +19,6 @@ const MessageSpacing = 20;  // vertical distance between Messages at different s
 const ActivityWidth = 10;  // width of each vertical activity bar
 const ActivityStart = 5;  // height before start message time
 const ActivityEnd = 5;  // height beyond end message time
-UnsavedFileName: string = 'Unsaved File';
 
 @Component({
   selector: 'diagram-diagram',
