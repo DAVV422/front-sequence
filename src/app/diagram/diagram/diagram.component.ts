@@ -1,4 +1,5 @@
-import { ChangeDetectorRef, Component, ViewChild, ViewEncapsulation } from '@angular/core';
+import { JsonFileService } from './../service/jsonFile.service';
+import { ChangeDetectorRef, Component, OnInit, ViewChild, ViewEncapsulation } from '@angular/core';
 import * as go from 'gojs';
 import { DataSyncService, DiagramComponent as Diagram } from 'gojs-angular';
 import produce from "immer";
@@ -26,11 +27,17 @@ const ActivityEnd = 5;  // height beyond end message time
   styleUrls: ['./diagram.component.css'],
   encapsulation: ViewEncapsulation.ShadowDom
 })
-export class DiagramComponent {
+export class DiagramComponent implements OnInit {
 
   @ViewChild('myDiagram', { static: true }) public myDiagramComponent!: Diagram;
 
-  constructor(private cdr: ChangeDetectorRef) { }
+  constructor(private cdr: ChangeDetectorRef, private jsonFileService: JsonFileService) { }
+
+  ngOnInit(): void {
+    this.jsonFileService.loadFromFile('diagramState.json').subscribe(data => {
+      this.state = data;
+    });
+  }
 
   public state = {
     // Diagram state props
@@ -51,172 +58,172 @@ export class DiagramComponent {
 
   public diagrama!: go.Diagram;
 
-// initialize diagram / templates
-public initDiagram(): go.Diagram {
+  // initialize diagram / templates
+  public initDiagram(): go.Diagram {
 
-  const $ = go.GraphObject.make;
-  this.diagrama = $(go.Diagram, {
-    'undoManager.isEnabled': true,
+    const $ = go.GraphObject.make;
+    this.diagrama = $(go.Diagram, {
+      'undoManager.isEnabled': true,
 
-    'clickCreatingTool.archetypeNodeData': { text: 'new node', color: 'lightblue' },
-    model: $(go.GraphLinksModel,
+      'clickCreatingTool.archetypeNodeData': { text: 'new node', color: 'lightblue' },
+      model: $(go.GraphLinksModel,
+        {
+          nodeKeyProperty: 'id',
+          linkToPortIdProperty: 'toPort',
+          linkFromPortIdProperty: 'fromPort',
+          linkKeyProperty: 'key' // IMPORTANT! must be defined for merges and data sync when using GraphLinksModel
+        }
+      )
+    });
+
+    this.diagrama.commandHandler.archetypeGroupData = { key: 'Group', isGroup: true };
+
+    const makePort = function(id: string, spot: go.Spot) {
+      return $(go.Shape, 'Circle',
+        {
+          opacity: .5,
+          fill: 'gray', strokeWidth: 0, desiredSize: new go.Size(8, 8),
+          portId: id, alignment: spot,
+          fromLinkable: true, toLinkable: true
+        }
+      );
+    }
+
+    const computeActivityLocation = (act: any) => {
+      const groupdata: go.ObjectData | null = this.diagrama.model.findNodeDataForKey(act.group);
+      if (groupdata === null) return new go.Point();
+      // get location of Lifeline's starting point
+      const grouploc = go.Point.parse(groupdata['loc']);
+      return new go.Point(grouploc.x, convertTimeToY(act.start) - ActivityStart);
+    }
+
+    const backComputeActivityLocation = (loc: any, act: any) => {
+      this.diagrama.model.setDataProperty(act, "start", convertYToTime(loc.y + ActivityStart));
+    }
+
+    const computeLifelineHeight = (duration: number) => {
+      return LinePrefix + duration * MessageSpacing + LineSuffix;
+    }
+
+    const computeActivityHeight = (duration: number) => {
+      return ActivityStart + duration * MessageSpacing + ActivityEnd;
+    };
+
+    const backComputeActivityHeight = (height: number) => {
+      return (height - ActivityStart - ActivityEnd) / MessageSpacing;
+    }
+
+    const convertTimeToY = (t: number) => {
+      return t * MessageSpacing + LinePrefix;
+    }
+
+    const convertYToTime = (y: number) => {
+      return (y - LinePrefix) / MessageSpacing;
+    }
+
+    // define the Lifeline Node template.
+    this.diagrama.groupTemplate =
+    $(go.Group, "Vertical",
       {
-        nodeKeyProperty: 'id',
-        linkToPortIdProperty: 'toPort',
-        linkFromPortIdProperty: 'fromPort',
-        linkKeyProperty: 'key' // IMPORTANT! must be defined for merges and data sync when using GraphLinksModel
-      }
-    )
-  });
-
-  this.diagrama.commandHandler.archetypeGroupData = { key: 'Group', isGroup: true };
-
-  const makePort = function(id: string, spot: go.Spot) {
-    return $(go.Shape, 'Circle',
-      {
-        opacity: .5,
-        fill: 'gray', strokeWidth: 0, desiredSize: new go.Size(8, 8),
-        portId: id, alignment: spot,
-        fromLinkable: true, toLinkable: true
-      }
+        locationSpot: go.Spot.Bottom,
+        locationObjectName: "HEADER",
+        minLocation: new go.Point(0, 0),
+        maxLocation: new go.Point(9999, 0),
+        selectionObjectName: "HEADER"
+      },
+      new go.Binding("location", "loc", go.Point.parse).makeTwoWay(go.Point.stringify),
+      $(go.Panel, "Auto",
+        { name: "HEADER" },
+        $(go.Shape, "Rectangle",
+          {
+            fill: $(go.Brush, "Linear", { 0: "#bbdefb", 1: go.Brush.darkenBy("#bbdefb", 0.1) }),
+            stroke: null
+          }),
+        $(go.TextBlock,
+          {
+            margin: 5,
+            font: "400 10pt Source Sans Pro, sans-serif"
+          },
+          new go.Binding("text", "text"))
+      ),
+      $(go.Shape,
+        {
+          figure: "LineV",
+          fill: null,
+          stroke: "gray",
+          strokeDashArray: [3, 3],
+          width: 1,
+          alignment: go.Spot.Center,
+          portId: "",
+          cursor: "pointer"
+        },
+        new go.Binding("height", "duration", computeLifelineHeight))
     );
-  }
 
-  const computeActivityLocation = (act: any) => {
-    const groupdata: go.ObjectData | null = this.diagrama.model.findNodeDataForKey(act.group);
-    if (groupdata === null) return new go.Point();
-    // get location of Lifeline's starting point
-    const grouploc = go.Point.parse(groupdata['loc']);
-    return new go.Point(grouploc.x, convertTimeToY(act.start) - ActivityStart);
-  }
 
-  const backComputeActivityLocation = (loc: any, act: any) => {
-    this.diagrama.model.setDataProperty(act, "start", convertYToTime(loc.y + ActivityStart));
-  }
-
-  const computeLifelineHeight = (duration: number) => {
-    return LinePrefix + duration * MessageSpacing + LineSuffix;
-  }
-
-  const computeActivityHeight = (duration: number) => {
-    return ActivityStart + duration * MessageSpacing + ActivityEnd;
-  };
-
-  const backComputeActivityHeight = (height: number) => {
-    return (height - ActivityStart - ActivityEnd) / MessageSpacing;
-  }
-
-  const convertTimeToY = (t: number) => {
-    return t * MessageSpacing + LinePrefix;
-  }
-
-  const convertYToTime = (y: number) => {
-    return (y - LinePrefix) / MessageSpacing;
-  }
-
-  // define the Lifeline Node template.
-  this.diagrama.groupTemplate =
-  $(go.Group, "Vertical",
-    {
-      locationSpot: go.Spot.Bottom,
-      locationObjectName: "HEADER",
-      minLocation: new go.Point(0, 0),
-      maxLocation: new go.Point(9999, 0),
-      selectionObjectName: "HEADER"
-    },
-    new go.Binding("location", "loc", go.Point.parse).makeTwoWay(go.Point.stringify),
-    $(go.Panel, "Auto",
-      { name: "HEADER" },
+    // define the Activity Node template
+    this.diagrama.nodeTemplate =
+    $(go.Node,
+      {
+        locationSpot: go.Spot.Top,
+        locationObjectName: "SHAPE",
+        minLocation: new go.Point(NaN, LinePrefix - ActivityStart),
+        maxLocation: new go.Point(NaN, 19999),
+        selectionObjectName: "SHAPE",
+        resizable: true,
+        resizeObjectName: "SHAPE",
+        movable: true,
+        resizeAdornmentTemplate:
+          $(go.Adornment, "Spot",
+            $(go.Placeholder),
+            $(go.Shape,  // only a bottom resize handle
+              {
+                alignment: go.Spot.Bottom, cursor: "col-resize",
+                desiredSize: new go.Size(6, 6), fill: "yellow"
+              })
+          ),
+        fromSpot: go.Spot.TopSide,
+        toSpot: go.Spot.BottomSide
+      },
+      new go.Binding("location", "", computeActivityLocation).makeTwoWay(backComputeActivityLocation),
       $(go.Shape, "Rectangle",
         {
-          fill: $(go.Brush, "Linear", { 0: "#bbdefb", 1: go.Brush.darkenBy("#bbdefb", 0.1) }),
-          stroke: null
-        }),
+          name: "SHAPEBOX",
+          fill: "white", stroke: "black",
+          width: ActivityWidth,
+          // allow Activities to be resized down to 1/4 of a time unit
+          minSize: new go.Size(ActivityWidth, computeActivityHeight(0.25)),
+          // Permite que el nodo actúe como un punto de conexión de salida y entrada para enlaces
+          fromLinkable: true,
+          toLinkable: true,
+          portId: "SHAPEBOX", // Asigna un portId único
+          fromSpot: go.Spot.AllSides, // Permitir conexiones desde todos los lados
+          toSpot: go.Spot.AllSides // Permitir conexiones desde todos los lados
+        },
+        new go.Binding("height", "duration", computeActivityHeight).makeTwoWay(backComputeActivityHeight)
+      ),
+    );
+
+    this.diagrama.linkTemplate =
+    $(go.Link,
+      { selectionAdorned: true, curviness: 0 },
+      $(go.Shape, "Rectangle",
+        { stroke: "black" }),
+      $(go.Shape,
+        { toArrow: "OpenTriangle", stroke: "black" }), // Flecha en el extremo "to"
       $(go.TextBlock,
         {
-          margin: 5,
-          font: "400 10pt Source Sans Pro, sans-serif"
+          font: "400 9pt Source Sans Pro, sans-serif",
+          segmentIndex: 0,
+          segmentOffset: new go.Point(NaN, NaN),
+          isMultiline: false,
+          editable: true
         },
-        new go.Binding("text", "text"))
-    ),
-    $(go.Shape,
-      {
-        figure: "LineV",
-        fill: null,
-        stroke: "gray",
-        strokeDashArray: [3, 3],
-        width: 1,
-        alignment: go.Spot.Center,
-        portId: "",
-        cursor: "pointer"
-      },
-      new go.Binding("height", "duration", computeLifelineHeight))
-  );
+      new go.Binding("text", "text").makeTwoWay())
+    );
 
-
-  // define the Activity Node template
-  this.diagrama.nodeTemplate =
-  $(go.Node,
-    {
-      locationSpot: go.Spot.Top,
-      locationObjectName: "SHAPE",
-      minLocation: new go.Point(NaN, LinePrefix - ActivityStart),
-      maxLocation: new go.Point(NaN, 19999),
-      selectionObjectName: "SHAPE",
-      resizable: true,
-      resizeObjectName: "SHAPE",
-      movable: true,
-      resizeAdornmentTemplate:
-        $(go.Adornment, "Spot",
-          $(go.Placeholder),
-          $(go.Shape,  // only a bottom resize handle
-            {
-              alignment: go.Spot.Bottom, cursor: "col-resize",
-              desiredSize: new go.Size(6, 6), fill: "yellow"
-            })
-        ),
-      fromSpot: go.Spot.TopSide,
-      toSpot: go.Spot.BottomSide
-    },
-    new go.Binding("location", "", computeActivityLocation).makeTwoWay(backComputeActivityLocation),
-    $(go.Shape, "Rectangle",
-      {
-        name: "SHAPEBOX",
-        fill: "white", stroke: "black",
-        width: ActivityWidth,
-        // allow Activities to be resized down to 1/4 of a time unit
-        minSize: new go.Size(ActivityWidth, computeActivityHeight(0.25)),
-        // Permite que el nodo actúe como un punto de conexión de salida y entrada para enlaces
-        fromLinkable: true,
-        toLinkable: true,
-        portId: "SHAPEBOX", // Asigna un portId único
-        fromSpot: go.Spot.AllSides, // Permitir conexiones desde todos los lados
-        toSpot: go.Spot.AllSides // Permitir conexiones desde todos los lados
-      },
-      new go.Binding("height", "duration", computeActivityHeight).makeTwoWay(backComputeActivityHeight)
-    ),
-  );
-
-  this.diagrama.linkTemplate =
-  $(go.Link,
-    { selectionAdorned: true, curviness: 0 },
-    $(go.Shape, "Rectangle",
-      { stroke: "black" }),
-    $(go.Shape,
-      { toArrow: "OpenTriangle", stroke: "black" }), // Flecha en el extremo "to"
-    $(go.TextBlock,
-      {
-        font: "400 9pt Source Sans Pro, sans-serif",
-        segmentIndex: 0,
-        segmentOffset: new go.Point(NaN, NaN),
-        isMultiline: false,
-        editable: true
-      },
-    new go.Binding("text", "text").makeTwoWay())
-  );
-
-  return this.diagrama;
-}
+    return this.diagrama;
+  }
 
 
   // When the diagram model changes, update app data to reflect those changes. Be sure to use immer's "produce" function to preserve immutability
@@ -299,6 +306,30 @@ public initDiagram(): go.Diagram {
         draft.skipsDiagramUpdate = false; // we need to sync GoJS data with this new app state, so do not skips Diagram update
       }
     });
+  }
+
+  // Guarda el estado del diagrama en un archivo JSON
+  saveStateToFile(): void {
+    this.jsonFileService.saveToFile(this.state, 'diagramState.json');
+  }
+
+  loadJson(event: Event): void {
+    const fileInput = event.target as HTMLInputElement;
+    const file = fileInput.files?.[0];
+
+    if (file) {
+      const fileReader = new FileReader();
+
+      fileReader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (result) {
+          this.state = JSON.parse(result);
+          // Aquí puedes realizar acciones adicionales, como actualizar el diagrama con el nuevo estado
+        }
+      };
+
+      fileReader.readAsText(file);
+    }
   }
 
 }

@@ -1,3 +1,4 @@
+
 <diagram-palette></diagram-palette>
 <div class="left">
   Diagram
@@ -9,4 +10,6 @@
 
 <div class="left">
   <diagram-inspector [nodeData]='state.selectedNodeData' (onInspectorChange)='handleInspectorChange($event)'></diagram-inspector>
+  <button class="button-3" (click)="saveStateToFile()">Guardar Estado</button>
+  <input class="button-7" type="file" (change)="loadJson($event)">
 </div>

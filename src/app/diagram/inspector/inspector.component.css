@@ -24,3 +24,29 @@ input:focus {
   border-radius: 10px;
   outline: none;
 }
+
+/* Para el encabezado <h3> */
+.title-inspector {
+  font-size: 1rem; /* equivalente a text-base */
+  font-weight: 600; /* equivalente a font-semibold */
+  line-height: 1.75; /* equivalente a leading-7 */
+  color: #1f2937; /* equivalente a text-gray-900 */
+}
+
+/* Para el párrafo <p> */
+.applicant-info-paragraph {
+  margin-top: 0.25rem; /* equivalente a mt-1 */
+  max-width: 40rem; /* equivalente a max-w-2xl */
+  font-size: 0.875rem; /* equivalente a text-sm */
+  line-height: 1.5; /* equivalente a leading-6 */
+  color: #6b7280; /* equivalente a text-gray-500 */
+}
+
+/* Estilos equivalentes a divide-y divide-gray-100 */
+.container-with-divider {
+  border-top: 1px solid #f3f4f6; /* Color del borde (gris claro) */
+}
+
+.container-with-divider > * + * {
+  border-top: 1px solid #f3f4f6; /* Agrega un borde superior entre elementos hijos */
+}
